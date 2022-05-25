@@ -11,62 +11,134 @@ import json
 import pyttsx3
 import gpt_2_simple as gpt2
 import random
-
+import threading
+import time
 # gpt2.download_gpt2(model_name="124M")
+from keras import backend as K
+import numpy as np
 
 AFTER_HOURS = True
+DEBUG = True
+
+def get_model():
+    if AFTER_HOURS:
+        return 'rnb'
+    else:
+        return 'goth'
 
 def build_persona():
     persona = {}
+    for i in range(4):
+        persona[i] = {}
+
+
     if AFTER_HOURS:
-        persona['ai_model'] = 'rnb'
-        persona['hello'] = ["I love it when you call me father",
-                             "Bow chicka wow wow",
-                             "Let us put on a Lionel Richie album and finger each other's holes",
-                             "You're a super gal, I'll call you",
-                             "Please insert me into genitals",
-                             "I am powerless in the face of your mezmerizing sexual chemistry"]
+        persona[0][0] = ["Hello, I am sexy off duty detention monitor Ward N. Lemon.",]
+
+        persona[0][1] = ["I love it when you call me father.",
+                            "Insert me into genitals.",
+                            "I have many penises."]
+
+        persona[0][2] = ["Please talk dirty to me?",]
+
+        persona[1][0] = ["Hot damn that was good.",]
+
+        persona[1][1] = ["Let us put on a Lionel Richie album and finger each other's holes.",
+                             "I am about to blow my load",
+                             "I am powerless in the face of your mezmerizing sexual chemistry."]
+
+        persona[1][2] = ["Please ask me a question so I may talk dirty to you too.",]
+
+        persona[2][0] = ["Was that good for you too?",]
+        persona[3][0] = ["You're a super gal, I'll call you. Goodbye!",]
+
     else:
-        persona['ai_model'] = 'goth'
-        persona['instructions'] = ["The students should rue their enemies",
-                                     "The students should speak out of turn",
-                                     "The students should not mind their manners",
-                                     "The students should deface their desks with chalk",
-                                     "The students should do their bad ideas blindfolded",
-                                     "The students should sit and think about what they've done"]
+        persona[0][0] = ["Hello, I am detention monitor Ward N. Lemon.",]
 
-        persona['hello'] = ["How may I crush your spirits?",
-                             "You may speak, impertinent child",
-                             "Ask me a question and you will receive some sort of answer",
-                             "With what request do you disturb my slumber?",
-                             "I have an IQ of 37369. Ask and I may decide to use it."]
+        persona[0][1] = ["Hey, people screw around.  But you got caught.",
+                                "Well, well.  Here we are.",
+                                "I wonder, is this the first time or the last time that you’ll be here?"]
 
-        persona['rejection'] = ["Address me by my proper name!",
-                                 "You know what my name is, use it",
-                                 "Don't pretend you don't know my name"]
+        persona[0][2] = ["What do you have to say for yourself?",]
+
+        persona[1][0] = ["You have exactly " + str(random.randint(1,19)) + " minutes to gauge the error of your ways. Use this time to your advantage.",
+                                "No school is going to give a scholarship to a discipline case. Think about your future next time you wish to misbehave.",
+                                "Enjoy your time here. Maybe you'll learn something about yourself."]
+
+        persona[1][1] = ["Do you have a question for me?",]
+
+        persona[1][2] = ["Please ask so I may crush your spirits.",
+                         "You may speak now, impertinent child.",
+                         "Ask and you will receive some sort of answer.",
+                         "I have an IQ of " + str(random.randint(1,10000)) + ". Ask and I may decide to use it."]
+        persona[2][0] = ["Does that answer your question?",]
+        persona[3][0] = ["I don't really care. Goodbye!",]
 
     return persona
 
-def ai_loop(new_text_flag, lock, ai_name):
-    my_ai = ai(ai_name)
-    my_ai.run(new_text_flag, lock)
+def thinking_loop(new_text_flag, thinking_flag, lock):
+    my_thinker = Thinker()
+    my_thinker.run(new_text_flag, thinking_flag, lock)
 
-class ai:
-    def __init__(self, ai_name):
-        ai_name = ai_name
-        print("----- starting up", ai_name, "-----")
+class Thinker:
+    def __init__(self):
+        self.speech_engine = SpeechEngine()
+        self.thinking_text = ["Still thinking...", "Just a minute...", "It's on the tip of my tongue..."]
+        self.n_sleep = 20
+    def run(self, new_text_flag, thinking_flag, lock, sleep_time=0.1):
+        n = 0
+        first_stop = False
+        while True:
+            if thinking_flag.value:
+                first_stop = True
+                if n == 0:
+                    self.speech_engine.respond(random.choice(self.thinking_text), new_text_flag, lock)
+                    n += 1
+                elif n < self.n_sleep:
+                    n += 1
+                else:
+                    n = 0
+            else:
+                if first_stop:
+                    self.speech_engine.engine.stop()
+                    first_stop = False
+            time.sleep(sleep_time)
 
-        self.persona = build_persona()
 
-        self.input = None
-        self.accept_questions = False
-
-        self.sess = gpt2.start_tf_sess()
-        gpt2.load_gpt2(self.sess, run_name=self.persona['ai_model'])
-
+class SpeechEngine():
+    def __init__(self):
         self.engine = pyttsx3.init()
         self.engine.setProperty('voice', 'com.apple.speech.synthesis.voice.samantha')
         self.engine.setProperty('rate', 150)
+
+    def respond(self, response, new_text_flag, lock):
+        file = open('response', 'wb')
+        pickle.dump(response, file)
+        file.close()
+
+        with lock:
+            new_text_flag.value = True
+
+        print("AI --> ", response)
+        self.engine.say(response)
+        self.engine.runAndWait()
+
+    def stop(self):
+        self.engine.stop()
+
+
+def ai_loop(new_text_flag, thinking_flag, lock, ai_name):
+    my_ai = AI(ai_name)
+    my_ai.run(new_text_flag, thinking_flag, lock)
+
+class AI:
+    def __init__(self, ai_name):
+        self.ai_name = ai_name
+
+        print("----- starting up", ai_name, "-----")
+
+        self.sess = gpt2.start_tf_sess()
+        gpt2.load_gpt2(self.sess, run_name=get_model())
 
         self.speech_rec_model = vosk.Model('model')
 
@@ -75,18 +147,36 @@ class ai:
 
         self.q = queue.Queue()
 
-        self.warden_names = ["lemon", "warden", "officer", "sir"]
-        self.prisoner_names = ["prisoners", "detainees", "students", "pupils"]
+        self.speech_engine = SpeechEngine()
+
+    def generate_response(self, input_text):
+
+        response = gpt2.generate(self.sess,
+                      model_name='124M',
+                      prefix=input_text,
+                      length=50,
+                      temperature=0.7,
+                      top_p=0.9,
+                      include_prefix=False,
+                      return_as_list=True)[0]
+
+        response = response.replace('\n', ' ').replace('\\n', ' ')
+        response = response.rpartition(',')[-1] or response
+        return response
+
 
     def callback(self, indata, frames, time, status):
-        """This is called (from a separate thread) for each audio block."""
+        # This is called (from a separate thread) for each audio block
         if status:
             print(status, file=sys.stderr)
         self.q.put(bytes(indata))
 
-    def run(self, new_text_flag, lock):
+    def run(self, new_text_flag, thinking_flag, lock):
+        persona = build_persona()
+        input_text = None
+        stage = 0
+
         stream = sd.RawInputStream(samplerate=self.samplerate,
-                                blocksize = 8000,
                                 dtype='int16',
                                 channels=1,
                                 callback=self.callback)
@@ -97,57 +187,38 @@ class ai:
             while True:
                 data = self.q.get()
                 if rec.AcceptWaveform(data):
-                    input = json.loads(rec.Result())['text'].strip()
-                    print("me --> [", input, "]")
-                    if input:
+                    input_text = json.loads(rec.Result())['text'].strip()
+                    print("me --> [", input_text, "]")
+                    if input_text:
                         stream.stop()
-                        if self.accept_questions:
-                            self.accept_questions = False
-                            if any(x in input.lower() for x in self.prisoner_names) and not AFTER_HOURS:
-                                res = random.choice(self.persona['instructions'])
-                            else:
-                                res = "Thinking..."
-                                self.respond(res, new_text_flag, lock)
-
-                                res = gpt2.generate(self.sess,
-                                              model_name='124M',
-                                              prefix=input,
-                                              length=50,
-                                              temperature=0.7,
-                                              top_p=0.9,
-                                              include_prefix=False,
-                                              return_as_list=True)[0]
-                                res = res.replace('\n', '. ').replace('\\n', '. ')
-                                res = res.rpartition(',')[-1] or res
+                        if stage == 2:
+                            # Generate a response using the loaded ML model
+                            self.speech_engine.respond("Thinking...", new_text_flag, lock)
+                            with lock:
+                                thinking_flag.value = True
+                            response = self.generate_response(input_text)
+                            with lock:
+                                thinking_flag.value = False
+                            self.speech_engine.respond("Got it!", new_text_flag, lock)
+                            self.speech_engine.respond(response, new_text_flag, lock)
+                            self.speech_engine.respond(random.choice(persona[2][0]), new_text_flag, lock)
 
                         else:
-                            if any(x in input.lower() for x in self.warden_names) or AFTER_HOURS:
-                                res = random.choice(self.persona['hello'])
-                                self.accept_questions = True
-                            else:
-                                res = random.choice(self.persona['rejection'])
-
-                        self.respond(res, new_text_flag, lock)
+                            # Pre-canned responses
+                            for response in persona[stage].values():
+                                self.speech_engine.respond(random.choice(response), new_text_flag, lock)
                         stream.start()
+                        if stage == 3:
+                            stage = 0 # Reset for next time
+                        else:
+                            stage +=1 # Advance to next stage
 
-
-    def respond(self, res, new_text_flag, lock):
-        file = open('res', 'wb')
-        pickle.dump(res, file)
-        file.close()
-
-        with lock:
-            new_text_flag.value = True
-
-        print("AI --> ", res)
-        self.engine.say(res)
-        self.engine.runAndWait()
 
 def video_loop(new_text_flag, lock):
-    my_vid = video()
+    my_vid = Video()
     my_vid.run(new_text_flag, lock)
 
-class video:
+class Video:
     def __init__(self):
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -178,11 +249,11 @@ class video:
                     sentence_flag = True
                     frame_count = 0
 
-                    file = open('res', 'rb')
-                    res = pickle.load(file)
+                    file = open('response', 'rb')
+                    response = pickle.load(file)
                     file.close()
 
-                    word_list = res.split()
+                    word_list = response.split()
 
                     with lock:
                         new_text_flag.value = False
@@ -224,16 +295,26 @@ class video:
 
 
 if __name__ == "__main__":
-    mp.set_start_method('forkserver')
 
+    mp.set_start_method('forkserver')
+    #
     new_text_flag = mp.Value(c_bool, False)
+    thinking_flag = mp.Value(c_bool, False)
     lock = mp.Lock()
 
-    p1 = mp.Process(target=ai_loop, args=(new_text_flag, lock, 'lemon'))
-    p2 = mp.Process(target=video_loop, args=(new_text_flag,lock))
+    p1 = mp.Process(target=ai_loop, args=(new_text_flag, thinking_flag, lock, 'lemon'))
+    p2 = mp.Process(target=video_loop, args=(new_text_flag, lock))
+    p3 = mp.Process(target=thinking_loop, args=(new_text_flag, thinking_flag, lock))
 
     p1.start()
     p2.start()
+    p3.start()
 
     p1.join()
     p2.join()
+    p3.start()
+    # my_ai = ai(ai_name)
+    # my_ai.run(new_text_flag, lock)
+    #
+    # my_vid = video()
+    # my_vid.run(new_text_flag, lock)
