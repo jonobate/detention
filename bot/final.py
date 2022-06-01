@@ -11,14 +11,10 @@ import json
 import pyttsx3
 import random
 import time
+import sys
 
-AFTER_HOURS = False
+AFTER_HOURS = True
 
-def get_model():
-    if AFTER_HOURS:
-        return 'rnb'
-    else:
-        return 'goth'
 
 def build_persona():
     persona = {}
@@ -29,17 +25,17 @@ def build_persona():
     if AFTER_HOURS:
         persona[0][0] = ["Hello, I am sexy off duty detention monitor Ward N. Lemon.",]
 
-        persona[0][1] = ["I love it when you call me father.",
-                            "Insert me into genitals.",
+        persona[0][1] = ["You get so much hotter every time we break up.",
+                            "You remind me so much of my sister.",
                             "I have many penises."]
 
         persona[0][2] = ["Please talk dirty to me?",]
 
         persona[1][0] = ["Hot damn that was good.",]
 
-        persona[1][1] = ["Let us put on a Lionel Richie album and finger each other's holes.",
-                             "I am about to blow my load",
-                             "I am powerless in the face of your mezmerizing sexual chemistry."]
+        persona[1][1] = ["Do you have any mouthwash?",
+                             "Did you use organic detergent, because if not, I am going to have to leave, because I will have a reaction.",
+                             "Are these Walmart panties?"]
 
         persona[1][2] = ["Please ask me a question so I may talk dirty to you too.",]
 
@@ -103,6 +99,8 @@ class AI:
         print("----- starting up", ai_name, "-----")
 
         self.speech_rec_model = vosk.Model('model')
+        
+        sd.default.device = [1, 0]
 
         device_info = sd.query_devices(None, 'input')
         self.samplerate = int(device_info['default_samplerate'])
@@ -110,8 +108,13 @@ class AI:
         self.q = queue.Queue()
 
         self.speech_engine = SpeechEngine()
+        
+        if AFTER_HOURS:
+            phrases_file = 'sexy_phrases.txt'
+        else:
+            phrases_file = 'random_phrases.txt'
 
-        self.responses = open('random_phrases.txt', encoding = "ISO-8859-1").read().splitlines()
+        self.responses = open(phrases_file, encoding = "ISO-8859-1").read().splitlines()
 
     def callback(self, indata, frames, time, status):
         # This is called (from a separate thread) for each audio block
@@ -143,12 +146,18 @@ class AI:
                             # Generate a response using the loaded ML model
                             self.speech_engine.respond("Thinking...", new_text_flag)
                             time.sleep(random.randint(1, 5))
-                            response = random.choice(self.responses)
+                            if AFTER_HOURS:
+                                response = ''
+                                for _ in range(10):
+                                    response += (random.choice(self.responses) + '. ')
+                            else:
+                                response = random.choice(self.responses)
                             self.speech_engine.respond("Got it!", new_text_flag)
                             self.speech_engine.respond(response, new_text_flag)
                             self.speech_engine.respond(random.choice(persona[2][0]), new_text_flag)
 
                         else:
+                            time.sleep(1)
                             # Pre-canned responses
                             for response in persona[stage].values():
                                 self.speech_engine.respond(random.choice(response), new_text_flag)
@@ -173,7 +182,7 @@ class Video:
         self.height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.fps =  self.cap.get(cv2.CAP_PROP_FPS)
 
-        self.word_duration = int(0.3 * self.fps)
+        self.word_duration = int(0.2 * self.fps)
 
         if AFTER_HOURS:
             self.text_color = (255,0,255)
